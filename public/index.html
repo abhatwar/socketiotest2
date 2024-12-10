@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Application</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    #chat {
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: #fff;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    #usernameInput, #messageInput {
+      width: calc(100% - 100px);
+      padding: 10px;
+    }
+    button {
+      padding: 10px;
+      margin-left: 10px;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chat Application</h1>
+  <div id="usernameSection">
+    <input id="usernameInput" type="text" placeholder="Enter your name">
+    <button id="startChatButton">Start Chat</button>
+  </div>
+  <div id="chatSection" class="hidden">
+    <div id="chat"></div>
+    <input id="messageInput" type="text" placeholder="Type your message here...">
+    <button id="sendButton">Send</button>
+  </div>
+
+  <script>
+    // DOM Elements
+    const usernameSection = document.getElementById('usernameSection');
+    const chatSection = document.getElementById('chatSection');
+    const chatDiv = document.getElementById('chat');
+    const usernameInput = document.getElementById('usernameInput');
+    const messageInput = document.getElementById('messageInput');
+    const startChatButton = document.getElementById('startChatButton');
+    const sendButton = document.getElementById('sendButton');
+
+    let socket;
+
+    // Display messages
+    function addMessage(message) {
+      const messageElement = document.createElement('div');
+      messageElement.textContent = message;
+      chatDiv.appendChild(messageElement);
+      chatDiv.scrollTop = chatDiv.scrollHeight; // Auto-scroll
+    }
+
+    // Start the chat
+    startChatButton.addEventListener('click', () => {
+      const username = usernameInput.value.trim();
+      if (!username) return alert('Please enter a valid name.');
+
+      // Connect to the WebSocket server
+      socket = new WebSocket('ws://localhost:8080');
+
+      // Handle WebSocket events
+      socket.addEventListener('open', () => {
+        socket.send(username); // Send the username as the first message
+        usernameSection.classList.add('hidden');
+        chatSection.classList.remove('hidden');
+      });
+
+      socket.addEventListener('message', (event) => {
+        addMessage(event.data);
+      });
+
+      socket.addEventListener('close', () => {
+        addMessage('Connection closed by the server.');
+      });
+
+      socket.addEventListener('error', (err) => {
+        console.error('WebSocket error:', err);
+        addMessage('An error occurred. Please try again.');
+      });
+    });
+
+    // Send chat messages
+    sendButton.addEventListener('click', () => {
+      const message = messageInput.value.trim();
+      if (message && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(message);
+        messageInput.value = '';
+      }
+    });
+  </script>
+</body>
+</html>
