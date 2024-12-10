@@ -70,7 +70,7 @@
       if (!username) return alert('Please enter a valid name.');
 
       // Connect to the WebSocket server
-      socket = new WebSocket('wss://localhost:8080');
+      socket = new WebSocket('wss://socketiotest2.onrender.com');
 
       // Handle WebSocket events
       socket.addEventListener('open', () => {
