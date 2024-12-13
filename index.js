@@ -16,8 +16,9 @@ const server = http.createServer(app);
 // Create a WebSocket server
 const wss = new WebSocket.Server({ server });
 
-// Store usernames
+// Store usernames and typing status
 const clients = new Map();
+const typingUsers = new Set();
 
 // Handle WebSocket connections
 wss.on('connection', (ws) => {
@@ -32,6 +33,8 @@ wss.on('connection', (ws) => {
       clients.set(ws, message);
       console.log(`User connected: ${message}`);
       ws.send(`Welcome to the chat, ${message}!`);
+      
+      // Notify other clients about the new user
       wss.clients.forEach((client) => {
         if (client !== ws && client.readyState === WebSocket.OPEN) {
           client.send(`${message} has joined the chat.`);
@@ -41,9 +44,23 @@ wss.on('connection', (ws) => {
     }
 
     const username = clients.get(ws);
-    console.log(`${username}: ${message}`);
+
+    if (message === 'typing') {
+      // Handle typing status
+      typingUsers.add(username);
+      broadcastTypingStatus();
+      return;
+    }
+
+    if (message === 'stopped typing') {
+      // Handle stopped typing status
+      typingUsers.delete(username);
+      broadcastTypingStatus();
+      return;
+    }
 
     // Broadcast the message to all connected clients
+    console.log(`${username}: ${message}`);
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(`${username}: ${message}`);
@@ -55,6 +72,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     const username = clients.get(ws);
     clients.delete(ws);
+    typingUsers.delete(username);
     console.log(`${username} disconnected.`);
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
@@ -63,6 +81,21 @@ wss.on('connection', (ws) => {
     });
   });
 });
+
+// Function to broadcast typing status
+function broadcastTypingStatus() {
+  let typingMessage = '';
+  if (typingUsers.size > 0) {
+    typingMessage = `${[...typingUsers].join(', ')} ${typingUsers.size > 1 ? 'are' : 'is'} typing...`;
+  }
+
+  // Broadcast typing status to all clients
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(typingMessage);
+    }
+  });
+}
 
 // Start the server
 const PORT = 8080;

@@ -3,104 +3,220 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat Application</title>
+  <title>Real-time Chat</title>
   <style>
+    /* Global styles */
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #f4f7fc, #e2e8f0);
       margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .container {
+      width: 100%;
+      max-width: 500px;
+      background-color: #fff;
       padding: 20px;
-      background-color: #f4f4f4;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      box-sizing: border-box;
     }
-    #chat {
-      border: 1px solid #ccc;
+
+    /* Name input section */
+    #nameSection {
+      text-align: center;
+    }
+
+    #nameInput {
+      width: 80%;
       padding: 10px;
-      background: #fff;
-      max-height: 300px;
-      overflow-y: auto;
-      margin-bottom: 10px;
+      font-size: 18px;
+      border: 2px solid #ddd;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      transition: border-color 0.3s;
     }
-    #usernameInput, #messageInput {
+
+    #nameInput:focus {
+      border-color: #4CAF50;
+      outline: none;
+    }
+
+    #startChatBtn {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+
+    #startChatBtn:hover {
+      background-color: #45a049;
+    }
+
+    /* Chat section */
+    #chatSection {
+      display: none;
+    }
+
+    #chatBox {
+      height: 300px;
+      overflow-y: auto;
+      padding: 10px;
+      background-color: #fafafa;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      margin-bottom: 20px;
+      box-sizing: border-box;
+    }
+
+    .message {
+      margin-bottom: 12px;
+    }
+
+    .message span {
+      font-weight: bold;
+      color: #4CAF50;
+    }
+
+    /* Input box and send button */
+    #inputBox {
       width: calc(100% - 100px);
       padding: 10px;
+      font-size: 16px;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+      box-sizing: border-box;
+      margin-bottom: 10px;
+      transition: border-color 0.3s;
     }
-    button {
+
+    #inputBox:focus {
+      border-color: #4CAF50;
+      outline: none;
+    }
+
+    #sendBtn {
       padding: 10px;
-      margin-left: 10px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s;
     }
-    .hidden {
-      display: none;
+
+    #sendBtn:disabled {
+      background-color: #ccc;
+    }
+
+    #sendBtn:hover {
+      background-color: #45a049;
+    }
+
+    /* Responsive design */
+    @media (max-width: 600px) {
+      .container {
+        width: 90%;
+        padding: 15px;
+      }
+
+      #nameInput {
+        width: 100%;
+      }
+
+      #inputBox {
+        width: calc(100% - 80px);
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Chat Application</h1>
-  <div id="usernameSection">
-    <input id="usernameInput" type="text" placeholder="Enter your name">
-    <button id="startChatButton">Start Chat</button>
-  </div>
-  <div id="chatSection" class="hidden">
-    <div id="chat"></div>
-    <input id="messageInput" type="text" placeholder="Type your message here...">
-    <button id="sendButton">Send</button>
+
+  <div class="container">
+    <!-- Name Input Section -->
+    <div id="nameSection">
+      <input type="text" id="nameInput" placeholder="Enter your name" />
+      <button id="startChatBtn" onclick="startChat()">Start Chat</button>
+    </div>
+
+    <!-- Chat Section -->
+    <div id="chatSection">
+      <div id="chatBox"></div>
+      <input type="text" id="inputBox" placeholder="Type a message..." oninput="handleTyping()" />
+      <button id="sendBtn" onclick="sendMessage()">Send</button>
+    </div>
   </div>
 
   <script>
-    // DOM Elements
-    const usernameSection = document.getElementById('usernameSection');
-    const chatSection = document.getElementById('chatSection');
-    const chatDiv = document.getElementById('chat');
-    const usernameInput = document.getElementById('usernameInput');
-    const messageInput = document.getElementById('messageInput');
-    const startChatButton = document.getElementById('startChatButton');
-    const sendButton = document.getElementById('sendButton');
+    const ws = new WebSocket('ws://localhost:8080');
+    let username = '';
+    let isTyping = false;
+    let typingTimeout;
 
-    let socket;
+    // Handle WebSocket messages
+    ws.onmessage = function(event) {
+      const message = event.data;
 
-    // Display messages
-    function addMessage(message) {
-      const messageElement = document.createElement('div');
-      messageElement.textContent = message;
-      chatDiv.appendChild(messageElement);
-      chatDiv.scrollTop = chatDiv.scrollHeight; // Auto-scroll
+      if (message === 'Please enter your name:') return;
+
+      // Display messages in the chat box (only actual messages)
+      const chatBox = document.getElementById('chatBox');
+      const messageElem = document.createElement('div');
+      messageElem.classList.add('message');
+      messageElem.textContent = message;
+      chatBox.appendChild(messageElem);
+
+      // Auto-scroll to the bottom
+      chatBox.scrollTop = chatBox.scrollHeight;
+    };
+
+    // Start the chat after name is entered
+    function startChat() {
+      username = document.getElementById('nameInput').value;
+      if (username.trim()) {
+        ws.send(username); // Send the username to the server
+        document.getElementById('nameSection').style.display = 'none';
+        document.getElementById('chatSection').style.display = 'block';
+      }
     }
 
-    // Start the chat
-    startChatButton.addEventListener('click', () => {
-      const username = usernameInput.value.trim();
-      if (!username) return alert('Please enter a valid name.');
-
-      // Connect to the WebSocket server
-      socket = new WebSocket('wss://socketiotest2.onrender.com');
-
-      // Handle WebSocket events
-      socket.addEventListener('open', () => {
-        socket.send(username); // Send the username as the first message
-        usernameSection.classList.add('hidden');
-        chatSection.classList.remove('hidden');
-      });
-
-      socket.addEventListener('message', (event) => {
-        addMessage(event.data);
-      });
-
-      socket.addEventListener('close', () => {
-        addMessage('Connection closed by the server.');
-      });
-
-      socket.addEventListener('error', (err) => {
-        console.error('WebSocket error:', err);
-        addMessage('An error occurred. Please try again.');
-      });
-    });
-
-    // Send chat messages
-    sendButton.addEventListener('click', () => {
-      const message = messageInput.value.trim();
-      if (message && socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(message);
-        messageInput.value = '';
+    // Handle typing status (but don't show in the chat box)
+    function handleTyping() {
+      if (!isTyping) {
+        isTyping = true;
+        // Don't send "typing" status to the server anymore
       }
-    });
+
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(stopTyping, 1000);
+    }
+
+    // Stop typing notification (but don't show in the chat box)
+    function stopTyping() {
+      isTyping = false;
+      // Don't send "stopped typing" status to the server anymore
+    }
+
+    // Send a message
+    function sendMessage() {
+      const message = document.getElementById('inputBox').value;
+      if (message.trim()) {
+        ws.send(message); // Send message to the server
+        document.getElementById('inputBox').value = ''; // Clear input field
+      }
+    }
   </script>
+
 </body>
 </html>
