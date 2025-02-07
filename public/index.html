@@ -3,181 +3,173 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat App</title>
+  <title>Chat Rooms</title>
   <style>
     body {
-      font-family: 'Arial', sans-serif;
-      background: #f4f7fc;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-    }
-    .container {
-      width: 400px;
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+      font-family: Arial, sans-serif;
       text-align: center;
     }
-    #chatBox {
-      height: 300px;
-      overflow-y: auto;
-      border: 1px solid #ddd;
-      padding: 10px;
-      margin-bottom: 10px;
-      border-radius: 5px;
-      background: #fafafa;
-      text-align: left;
+    .container {
+      width: 300px;
+      margin: 0 auto;
+    }
+    .hidden {
+      display: none;
     }
     .message {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      background: white;
+      background: #f1f1f1;
       padding: 5px;
-      margin: 5px 0;
+      margin: 5px;
       border-radius: 5px;
     }
-    .notification {
-      text-align: center;
-      color: gray;
+    .typing {
       font-style: italic;
-    }
-    .actions {
-      display: flex;
-      gap: 5px;
-    }
-    button {
-      padding: 5px;
-      border: none;
-      cursor: pointer;
-      border-radius: 3px;
-    }
-    .edit-btn {
-      background: #f0ad4e;
-      color: white;
-    }
-    .delete-btn {
-      background: #d9534f;
-      color: white;
-    }
-    #chatSection {
-      display: none;
+      color: gray;
     }
   </style>
 </head>
 <body>
+  <div id="loginScreen" class="container">
+    <h2>Enter Your Name</h2>
+    <input type="text" id="username" placeholder="Your Name">
+    <button onclick="enterChat()">Enter</button>
+  </div>
 
-  <div class="container">
-    <div id="nameSection">
-      <h3>Enter Your Name</h3>
-      <input type="text" id="nameInput" placeholder="Your Name">
-      <button onclick="setName()">Join Chat</button>
-    </div>
+  <div id="roomScreen" class="container hidden">
+    <h2>Chat Rooms</h2>
+    <input type="text" id="roomName" placeholder="New Room Name">
+    <button onclick="createRoom()">Create Room</button>
+    <h3>Available Rooms</h3>
+    <ul id="roomsList"></ul>
+  </div>
 
-    <div id="chatSection">
-      <h3>Chat Room</h3>
-      <div id="chatBox"></div>
-
-      <input type="text" id="inputBox" placeholder="Type a message...">
-      <button onclick="sendMessage()">Send</button>
-    </div>
+  <div id="chatScreen" class="container hidden">
+    <h2 id="roomTitle"></h2>
+    <div id="chatBox" style="height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;"></div>
+    <p id="typingIndicator" class="typing"></p>
+    <input type="text" id="messageInput" placeholder="Type a message..." oninput="sendTyping()">
+    <button onclick="sendMessage()">Send</button>
+    <button onclick="leaveRoom()">Leave Room</button>
   </div>
 
   <script>
-    const ws = new WebSocket('wss://socketiotest2.onrender.com');
-    let username = '';
+    let ws, username, currentRoom;
 
-    ws.onmessage = function(event) {
-      const data = JSON.parse(event.data);
+    function enterChat() {
+      username = document.getElementById('username').value.trim();
+      if (!username) return;
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('roomScreen').classList.remove('hidden');
 
-      if (data.type === 'init') {
-        document.getElementById('chatBox').innerHTML = '';
-        data.messages.forEach(addMessageToChat);
-      }
-      if (data.type === 'userJoined') showNotification(`${data.name} joined the chat.`);
-      if (data.type === 'userLeft') showNotification(`${data.name} left the chat.`);
-      if (data.type === 'newMessage') addMessageToChat(data.message);
-      if (data.type === 'updateMessage') updateMessageInChat(data.id, data.text);
-      if (data.type === 'removeMessage') removeMessageFromChat(data.id);
-    };
+      ws = new WebSocket('ws://localhost:8080');
 
-    function setName() {
-      username = document.getElementById('nameInput').value.trim();
-      if (username) {
+      ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'setName', name: username }));
-        document.getElementById('nameSection').style.display = 'none';
-        document.getElementById('chatSection').style.display = 'block';
+        fetchRooms();
+      };
+
+      ws.onmessage = handleMessage;
+    }
+
+    function fetchRooms() {
+      ws.send(JSON.stringify({ type: 'getRooms' }));
+    }
+
+    function createRoom() {
+      const room = document.getElementById('roomName').value.trim();
+      if (!room) return;
+      ws.send(JSON.stringify({ type: 'createRoom', room }));
+      joinRoom(room);
+    }
+
+    function joinRoom(room) {
+      currentRoom = room;
+      ws.send(JSON.stringify({ type: 'joinRoom', room, name: username }));
+      document.getElementById('roomScreen').classList.add('hidden');
+      document.getElementById('chatScreen').classList.remove('hidden');
+      document.getElementById('roomTitle').innerText = room;
+      document.getElementById('chatBox').innerHTML = '';
+    }
+
+    function leaveRoom() {
+      if (currentRoom) {
+        ws.send(JSON.stringify({ type: 'leaveRoom', room: currentRoom }));
+        currentRoom = null;
       }
+      document.getElementById('chatScreen').classList.add('hidden');
+      document.getElementById('roomScreen').classList.remove('hidden');
+      fetchRooms();
     }
 
     function sendMessage() {
-      const text = document.getElementById('inputBox').value.trim();
-      if (text) {
-        ws.send(JSON.stringify({ type: 'sendMessage', text }));
-        document.getElementById('inputBox').value = '';
-      }
+      const message = document.getElementById('messageInput').value.trim();
+      if (!message) return;
+      ws.send(JSON.stringify({ type: 'sendMessage', text: message, room: currentRoom }));
+      document.getElementById('messageInput').value = '';
+    }
+
+    function sendTyping() {
+      ws.send(JSON.stringify({ type: 'typing', room: currentRoom }));
+      setTimeout(() => {
+        ws.send(JSON.stringify({ type: 'stopTyping', room: currentRoom }));
+      }, 1000);
     }
 
     function editMessage(id, oldText) {
-      const newText = prompt('Edit message:', oldText);
-      if (newText !== null) {
-        ws.send(JSON.stringify({ type: 'editMessage', id, text: newText }));
+      const newText = prompt('Edit your message:', oldText);
+      if (newText !== null && newText.trim() !== '') {
+        ws.send(JSON.stringify({ type: 'editMessage', id, text: newText, room: currentRoom }));
       }
     }
 
     function deleteMessage(id) {
       if (confirm('Are you sure you want to delete this message?')) {
-        ws.send(JSON.stringify({ type: 'deleteMessage', id }));
+        ws.send(JSON.stringify({ type: 'deleteMessage', id, room: currentRoom }));
       }
     }
 
-    function addMessageToChat(message) {
-      const chatBox = document.getElementById('chatBox');
-      const div = document.createElement('div');
-      div.classList.add('message');
-      div.id = `msg-${message.id}`;
+    function handleMessage(event) {
+      const data = JSON.parse(event.data);
 
-      div.innerHTML = `
-        <span>${message.user}: ${message.text}</span>
-        ${message.user === username ? `
-          <div class="actions">
-            <button class="edit-btn" onclick="editMessage(${message.id}, '${message.text}')">Edit</button>
-            <button class="delete-btn" onclick="deleteMessage(${message.id})">Delete</button>
-          </div>
-        ` : ''}
-      `;
-
-      chatBox.appendChild(div);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    function updateMessageInChat(id, text) {
-      const messageDiv = document.getElementById(`msg-${id}`);
-      if (messageDiv) {
-        messageDiv.querySelector('span').textContent = `${username}: ${text}`;
+      if (data.type === 'roomList') {
+        const roomsList = document.getElementById('roomsList');
+        roomsList.innerHTML = '';
+        data.rooms.forEach(room => {
+          const li = document.createElement('li');
+          li.innerHTML = `<button onclick="joinRoom('${room}')">${room}</button>`;
+          roomsList.appendChild(li);
+        });
+      } else if (data.type === 'newMessage') {
+        const chatBox = document.getElementById('chatBox');
+        const messageElem = document.createElement('div');
+        messageElem.classList.add('message');
+        messageElem.innerHTML = `
+          <span>${data.message.user}: ${data.message.text}</span>
+          ${data.message.user === username
+            ? `<button onclick="editMessage(${data.message.id}, '${data.message.text}')">Edit</button>
+               <button onclick="deleteMessage(${data.message.id})">Delete</button>`
+            : ''}
+        `;
+        chatBox.appendChild(messageElem);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      } else if (data.type === 'removeMessage') {
+        document.querySelectorAll('.message').forEach(msg => {
+          if (msg.innerText.includes(data.id)) msg.remove();
+        });
+      } else if (data.type === 'updateMessage') {
+        document.querySelectorAll('.message').forEach(msg => {
+          if (msg.innerText.includes(data.id)) {
+            msg.innerHTML = `<span>${data.user}: ${data.text}</span>`;
+          }
+        });
+      } else if (data.type === 'typing') {
+        document.getElementById('typingIndicator').innerText = `${data.name} is typing...`;
+      } else if (data.type === 'stopTyping') {
+        document.getElementById('typingIndicator').innerText = '';
       }
-    }
-
-    function removeMessageFromChat(id) {
-      const messageDiv = document.getElementById(`msg-${id}`);
-      if (messageDiv) {
-        messageDiv.remove();
-      }
-    }
-
-    function showNotification(text) {
-      const chatBox = document.getElementById('chatBox');
-      const div = document.createElement('div');
-      div.classList.add('notification');
-      div.textContent = text;
-      chatBox.appendChild(div);
-      chatBox.scrollTop = chatBox.scrollHeight;
     }
   </script>
-
 </body>
 </html>
