@@ -16,83 +16,60 @@ const server = http.createServer(app);
 // Create a WebSocket server
 const wss = new WebSocket.Server({ server });
 
-// Store usernames and typing status
+// Store usernames and messages
 const clients = new Map();
-const typingUsers = new Set();
+let messages = [];
 
 // Handle WebSocket connections
 wss.on('connection', (ws) => {
   console.log('A new client connected!');
 
-  // Ask for the user's name
-  ws.send('Please enter your name:');
+  ws.send(JSON.stringify({ type: 'init', messages }));
 
   ws.on('message', (message) => {
-    if (!clients.has(ws)) {
-      // First message is the username
-      clients.set(ws, message);
-      console.log(`User connected: ${message}`);
-      ws.send(`Welcome to the chat, ${message}!`);
-      
-      // Notify other clients about the new user
-      wss.clients.forEach((client) => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(`${message} has joined the chat.`);
-        }
-      });
+    const data = JSON.parse(message);
+    
+    if (data.type === 'setName') {
+      clients.set(ws, data.name);
+      broadcast({ type: 'userJoined', name: data.name });
       return;
     }
 
-    const username = clients.get(ws);
-
-    if (message === 'typing') {
-      // Handle typing status
-      typingUsers.add(username);
-      broadcastTypingStatus();
+    if (data.type === 'sendMessage') {
+      const msgObj = { id: Date.now(), user: clients.get(ws), text: data.text };
+      messages.push(msgObj);
+      broadcast({ type: 'newMessage', message: msgObj });
       return;
     }
 
-    if (message === 'stopped typing') {
-      // Handle stopped typing status
-      typingUsers.delete(username);
-      broadcastTypingStatus();
-      return;
-    }
-
-    // Broadcast the message to all connected clients
-    console.log(`${username}: ${message}`);
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(`${username}: ${message}`);
+    if (data.type === 'editMessage') {
+      const msgIndex = messages.findIndex(msg => msg.id === data.id);
+      if (msgIndex !== -1 && messages[msgIndex].user === clients.get(ws)) {
+        messages[msgIndex].text = data.text;
+        broadcast({ type: 'updateMessage', id: data.id, text: data.text });
       }
-    });
+      return;
+    }
+
+    if (data.type === 'deleteMessage') {
+      messages = messages.filter(msg => msg.id !== data.id);
+      broadcast({ type: 'removeMessage', id: data.id });
+      return;
+    }
   });
 
-  // Handle client disconnection
   ws.on('close', () => {
     const username = clients.get(ws);
     clients.delete(ws);
-    typingUsers.delete(username);
-    console.log(`${username} disconnected.`);
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(`${username} has left the chat.`);
-      }
-    });
+    broadcast({ type: 'userLeft', name: username });
   });
 });
 
-// Function to broadcast typing status
-function broadcastTypingStatus() {
-  let typingMessage = '';
-  if (typingUsers.size > 0) {
-    typingMessage = `${[...typingUsers].join(', ')} ${typingUsers.size > 1 ? 'are' : 'is'} typing...`;
-  }
-
-  // Broadcast typing status to all clients
-  wss.clients.forEach((client) => {
+// Function to broadcast messages to all clients
+function broadcast(data) {
+  wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(typingMessage);
+      client.send(JSON.stringify(data));
     }
   });
 }
@@ -100,5 +77,5 @@ function broadcastTypingStatus() {
 // Start the server
 const PORT = 8080;
 server.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
