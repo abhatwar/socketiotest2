@@ -52,8 +52,11 @@ wss.on('connection', (ws) => {
     }
 
     if (data.type === 'deleteMessage') {
-      messages = messages.filter(msg => msg.id !== data.id);
-      broadcast({ type: 'removeMessage', id: data.id });
+      const msgIndex = messages.findIndex(msg => msg.id === data.id);
+      if (msgIndex !== -1 && messages[msgIndex].user === clients.get(ws)) {
+        messages.splice(msgIndex, 1);
+        broadcast({ type: 'removeMessage', id: data.id });
+      }
       return;
     }
   });

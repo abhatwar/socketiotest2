@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat App with Edit & Delete</title>
+  <title>Chat App</title>
   <style>
     body {
       font-family: 'Arial', sans-serif;
@@ -20,6 +20,7 @@
       padding: 20px;
       border-radius: 10px;
       box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+      text-align: center;
     }
     #chatBox {
       height: 300px;
@@ -29,6 +30,7 @@
       margin-bottom: 10px;
       border-radius: 5px;
       background: #fafafa;
+      text-align: left;
     }
     .message {
       display: flex;
@@ -39,8 +41,10 @@
       margin: 5px 0;
       border-radius: 5px;
     }
-    .message span {
-      flex: 1;
+    .notification {
+      text-align: center;
+      color: gray;
+      font-style: italic;
     }
     .actions {
       display: flex;
@@ -60,18 +64,27 @@
       background: #d9534f;
       color: white;
     }
+    #chatSection {
+      display: none;
+    }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <input type="text" id="nameInput" placeholder="Enter your name">
-    <button onclick="setName()">Join Chat</button>
+    <div id="nameSection">
+      <h3>Enter Your Name</h3>
+      <input type="text" id="nameInput" placeholder="Your Name">
+      <button onclick="setName()">Join Chat</button>
+    </div>
 
-    <div id="chatBox"></div>
+    <div id="chatSection">
+      <h3>Chat Room</h3>
+      <div id="chatBox"></div>
 
-    <input type="text" id="inputBox" placeholder="Type a message...">
-    <button onclick="sendMessage()">Send</button>
+      <input type="text" id="inputBox" placeholder="Type a message...">
+      <button onclick="sendMessage()">Send</button>
+    </div>
   </div>
 
   <script>
@@ -85,6 +98,8 @@
         document.getElementById('chatBox').innerHTML = '';
         data.messages.forEach(addMessageToChat);
       }
+      if (data.type === 'userJoined') showNotification(`${data.name} joined the chat.`);
+      if (data.type === 'userLeft') showNotification(`${data.name} left the chat.`);
       if (data.type === 'newMessage') addMessageToChat(data.message);
       if (data.type === 'updateMessage') updateMessageInChat(data.id, data.text);
       if (data.type === 'removeMessage') removeMessageFromChat(data.id);
@@ -94,7 +109,8 @@
       username = document.getElementById('nameInput').value.trim();
       if (username) {
         ws.send(JSON.stringify({ type: 'setName', name: username }));
-        document.getElementById('nameInput').style.display = 'none';
+        document.getElementById('nameSection').style.display = 'none';
+        document.getElementById('chatSection').style.display = 'block';
       }
     }
 
@@ -127,10 +143,12 @@
 
       div.innerHTML = `
         <span>${message.user}: ${message.text}</span>
-        <div class="actions">
-          <button class="edit-btn" onclick="editMessage(${message.id}, '${message.text}')">Edit</button>
-          <button class="delete-btn" onclick="deleteMessage(${message.id})">Delete</button>
-        </div>
+        ${message.user === username ? `
+          <div class="actions">
+            <button class="edit-btn" onclick="editMessage(${message.id}, '${message.text}')">Edit</button>
+            <button class="delete-btn" onclick="deleteMessage(${message.id})">Delete</button>
+          </div>
+        ` : ''}
       `;
 
       chatBox.appendChild(div);
@@ -149,6 +167,15 @@
       if (messageDiv) {
         messageDiv.remove();
       }
+    }
+
+    function showNotification(text) {
+      const chatBox = document.getElementById('chatBox');
+      const div = document.createElement('div');
+      div.classList.add('notification');
+      div.textContent = text;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
   </script>
 
