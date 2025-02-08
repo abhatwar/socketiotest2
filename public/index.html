@@ -63,13 +63,11 @@
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('roomScreen').classList.remove('hidden');
 
-      ws = new WebSocket('wss://socketiotest2.onrender.com');
-
+      ws = new WebSocket('ws://localhost:8080');
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'setName', name: username }));
         fetchRooms();
       };
-
       ws.onmessage = handleMessage;
     }
 
@@ -118,58 +116,72 @@
     }
 
     function editMessage(id, oldText) {
-      const newText = prompt('Edit your message:', oldText);
-      if (newText !== null && newText.trim() !== '') {
-        ws.send(JSON.stringify({ type: 'editMessage', id, text: newText, room: currentRoom }));
+      const newText = prompt("Edit your message:", oldText);
+      if (newText) {
+        ws.send(JSON.stringify({ type: 'editMessage', id, text: newText }));
       }
     }
 
     function deleteMessage(id) {
-      if (confirm('Are you sure you want to delete this message?')) {
-        ws.send(JSON.stringify({ type: 'deleteMessage', id, room: currentRoom }));
+      if (confirm("Are you sure you want to delete this message?")) {
+        ws.send(JSON.stringify({ type: 'deleteMessage', id }));
       }
     }
 
     function handleMessage(event) {
-      const data = JSON.parse(event.data);
+  const data = JSON.parse(event.data);
 
-      if (data.type === 'roomList') {
-        const roomsList = document.getElementById('roomsList');
-        roomsList.innerHTML = '';
-        data.rooms.forEach(room => {
-          const li = document.createElement('li');
-          li.innerHTML = `<button onclick="joinRoom('${room}')">${room}</button>`;
-          roomsList.appendChild(li);
-        });
-      } else if (data.type === 'newMessage') {
-        const chatBox = document.getElementById('chatBox');
-        const messageElem = document.createElement('div');
-        messageElem.classList.add('message');
-        messageElem.innerHTML = `
-          <span>${data.message.user}: ${data.message.text}</span>
-          ${data.message.user === username
-            ? `<button onclick="editMessage(${data.message.id}, '${data.message.text}')">Edit</button>
-               <button onclick="deleteMessage(${data.message.id})">Delete</button>`
-            : ''}
-        `;
-        chatBox.appendChild(messageElem);
-        chatBox.scrollTop = chatBox.scrollHeight;
-      } else if (data.type === 'removeMessage') {
-        document.querySelectorAll('.message').forEach(msg => {
-          if (msg.innerText.includes(data.id)) msg.remove();
-        });
-      } else if (data.type === 'updateMessage') {
-        document.querySelectorAll('.message').forEach(msg => {
-          if (msg.innerText.includes(data.id)) {
-            msg.innerHTML = `<span>${data.user}: ${data.text}</span>`;
-          }
-        });
-      } else if (data.type === 'typing') {
-        document.getElementById('typingIndicator').innerText = `${data.name} is typing...`;
-      } else if (data.type === 'stopTyping') {
-        document.getElementById('typingIndicator').innerText = '';
-      }
+  if (data.type === 'roomList') {
+    const roomsList = document.getElementById('roomsList');
+    roomsList.innerHTML = '';
+    data.rooms.forEach(room => {
+      const li = document.createElement('li');
+      li.innerHTML = `<button onclick="joinRoom('${room}')">${room}</button>`;
+      roomsList.appendChild(li);
+    });
+  } else if (data.type === 'roomJoined') {
+    document.getElementById('roomScreen').classList.add('hidden');
+    document.getElementById('chatScreen').classList.remove('hidden');
+    document.getElementById('roomTitle').innerText = data.room;
+    document.getElementById('chatBox').innerHTML = '';
+  } else if (data.type === 'newMessage') {
+    const chatBox = document.getElementById('chatBox');
+    const messageElem = document.createElement('div');
+    messageElem.classList.add('message');
+    messageElem.setAttribute('data-id', data.message.id);
+    messageElem.innerHTML = `
+      <span><strong>${data.message.user}:</strong> ${data.message.text}</span>
+      ${data.message.user === username ? 
+        `<button onclick="editMessage(${data.message.id}, '${data.message.text}')">Edit</button>
+         <button onclick="deleteMessage(${data.message.id})">Delete</button>` : ''}
+    `;
+    chatBox.appendChild(messageElem);
+  } else if (data.type === 'updateMessage') {
+    const messageElem = document.querySelector(`.message[data-id="${data.id}"] span`);
+    if (messageElem) {
+      messageElem.innerHTML = `<strong>${username}:</strong> ${data.text}`;
     }
+  } else if (data.type === 'removeMessage') {
+    const messageElem = document.querySelector(`.message[data-id="${data.id}"]`);
+    if (messageElem) {
+      messageElem.remove();
+    }
+  } else if (data.type === 'userJoined') {
+    displayNotification(`${data.name} joined the chat.`);
+  } else if (data.type === 'userLeft') {
+    displayNotification(`${data.name} left the chat.`);
+  }
+}
+
+function displayNotification(text) {
+  const chatBox = document.getElementById('chatBox');
+  const notificationElem = document.createElement('div');
+  notificationElem.style.color = 'gray';
+  notificationElem.style.fontStyle = 'italic';
+  notificationElem.innerText = text;
+  chatBox.appendChild(notificationElem);
+}
+
   </script>
 </body>
 </html>
