@@ -63,7 +63,7 @@
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('roomScreen').classList.remove('hidden');
 
-      ws = new WebSocket('wss://socketiotest2.onrender.com');
+      ws = new WebSocket('ws://localhost:8080');
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'setName', name: username }));
         fetchRooms();

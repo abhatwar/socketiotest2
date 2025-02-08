@@ -1,114 +1,137 @@
-// Importing required libraries
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 
-// Create an Express app
 const app = express();
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Create an HTTP server
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Store clients, rooms, and messages
-const clients = new Map();
-const rooms = new Map();
+// Serve the frontend files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Handle root request
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+let rooms = {}; // Stores chat rooms { roomName: { users: [], messages: [] } }
 
 wss.on('connection', (ws) => {
-  console.log('A new client connected!');
+    let user = { name: null, room: null };
 
-  ws.on('message', (message) => {
-    const data = JSON.parse(message);
+    ws.on('message', (message) => {
+        const data = JSON.parse(message);
 
-    if (data.type === 'setName') {
-      clients.set(ws, data.name);
-      ws.send(JSON.stringify({ type: 'roomList', rooms: Array.from(rooms.keys()) }));
-    }
+        if (data.type === 'setName') {
+            user.name = data.name;
+            sendRooms();
+        }
 
-    if (data.type === 'getRooms') {
-      ws.send(JSON.stringify({ type: 'roomList', rooms: Array.from(rooms.keys()) }));
-    }
+        if (data.type === 'getRooms') {
+            sendRooms();
+        }
 
-    if (data.type === 'createRoom') {
-      if (!rooms.has(data.room)) {
-        rooms.set(data.room, new Set());
-        broadcastRoomList();
+        if (data.type === 'createRoom') {
+            if (!rooms[data.room]) {
+                rooms[data.room] = { users: [], messages: [] };
+            }
+            sendRooms();
+        }
+
+        if (data.type === 'joinRoom') {
+            user.room = data.room;
+            if (!rooms[user.room]) {
+                rooms[user.room] = { users: [], messages: [] };
+            }
+            rooms[user.room].users.push(ws);
+            broadcast(user.room, { type: 'newMessage', message: { user: 'System', text: `${user.name} joined` } });
+            sendRoomMessages(ws, user.room);
+            sendRooms();
+        }
+
+        if (data.type === 'sendMessage') {
+          if (user.room && rooms[user.room]) {
+              const msg = { id: Date.now(), user: user.name, text: data.text };
+              rooms[user.room].messages.push(msg);
+              broadcast(user.room, { type: 'newMessage', message: msg });
+          }
       }
-    }
 
-    if (data.type === 'joinRoom') {
-      leaveCurrentRoom(ws);
-      if (!rooms.has(data.room)) {
-        rooms.set(data.room, new Set());
-      }
-      rooms.get(data.room).add(ws);
-      ws.currentRoom = data.room;
-      ws.send(JSON.stringify({ type: 'roomJoined', room: data.room }));
-      broadcastRoomList();
-    }
-
-    if (data.type === 'leaveRoom') {
-      leaveCurrentRoom(ws);
-      broadcastRoomList();
-    }
-
-    if (data.type === 'sendMessage') {
-      const messageObj = { id: Date.now(), user: clients.get(ws), text: data.text };
-      broadcastToRoom(data.room, { type: 'newMessage', message: messageObj });
-    }
-
-    if (data.type === 'editMessage') {
-      broadcastToRoom(ws.currentRoom, { type: 'updateMessage', id: data.id, text: data.text });
+      if (data.type === 'editMessage') {
+        if (user.room && rooms[user.room]) {
+            rooms[user.room].messages.forEach(msg => {
+                if (msg.id === data.id && msg.user === user.name) {
+                    msg.text = data.text;
+                    broadcast(user.room, { type: 'updateMessage', id: msg.id, text: msg.text, user: msg.user });
+                }
+            });
+        }
     }
 
     if (data.type === 'deleteMessage') {
-      broadcastToRoom(ws.currentRoom, { type: 'removeMessage', id: data.id });
-    }
-  });
-
-  ws.on('close', () => {
-    leaveCurrentRoom(ws);
-    clients.delete(ws);
-    broadcastRoomList();
-  });
-
-  function leaveCurrentRoom(ws) {
-    if (ws.currentRoom) {
-      const room = rooms.get(ws.currentRoom);
-      if (room) {
-        room.delete(ws);
-        if (room.size === 0) {
-          rooms.delete(ws.currentRoom);
-        }
+      if (user.room && rooms[user.room]) {
+          rooms[user.room].messages = rooms[user.room].messages.filter(msg => msg.id !== data.id || msg.user !== user.name);
+          broadcast(user.room, { type: 'removeMessage', id: data.id });
       }
-      ws.currentRoom = null;
-    }
   }
 
-  function broadcastRoomList() {
-    const roomList = Array.from(rooms.keys());
-    wss.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ type: 'roomList', rooms: roomList }));
-      }
+        if (data.type === 'leaveRoom') {
+            leaveRoom(ws);
+        }
+
+        if (data.type === 'typing') {
+            broadcast(user.room, { type: 'typing', name: user.name });
+        }
+
+        if (data.type === 'stopTyping') {
+            broadcast(user.room, { type: 'stopTyping' });
+        }
     });
-  }
 
-  function broadcastToRoom(room, message) {
-    if (rooms.has(room)) {
-      rooms.get(room).forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(message));
+    ws.on('close', () => {
+        leaveRoom(ws);
+    });
+
+    function leaveRoom(ws) {
+        if (user.room && rooms[user.room]) {
+            rooms[user.room].users = rooms[user.room].users.filter(client => client !== ws);
+            broadcast(user.room, { type: 'newMessage', message: { user: 'System', text: `${user.name} left` } });
+            if (rooms[user.room].users.length === 0) {
+                delete rooms[user.room];
+            }
+            sendRooms();
         }
-      });
     }
-  }
+
+    function broadcast(room, data) {
+        if (rooms[room]) {
+            rooms[room].users.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify(data));
+                }
+            });
+        }
+    }
+
+    function sendRooms() {
+        const roomList = Object.keys(rooms);
+        wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: 'roomList', rooms: roomList }));
+            }
+        });
+    }
+
+    function sendRoomMessages(ws, room) {
+        if (rooms[room]) {
+            rooms[room].messages.forEach(msg => {
+                ws.send(JSON.stringify({ type: 'newMessage', message: msg }));
+            });
+        }
+    }
 });
 
-// Start the server
-const PORT = 8080;
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+server.listen(8080, () => {
+    console.log('Server running on http://localhost:8080');
 });
