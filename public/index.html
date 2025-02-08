@@ -129,59 +129,58 @@
     }
 
     function handleMessage(event) {
-  const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data);
 
-  if (data.type === 'roomList') {
-    const roomsList = document.getElementById('roomsList');
-    roomsList.innerHTML = '';
-    data.rooms.forEach(room => {
-      const li = document.createElement('li');
-      li.innerHTML = `<button onclick="joinRoom('${room}')">${room}</button>`;
-      roomsList.appendChild(li);
-    });
-  } else if (data.type === 'roomJoined') {
-    document.getElementById('roomScreen').classList.add('hidden');
-    document.getElementById('chatScreen').classList.remove('hidden');
-    document.getElementById('roomTitle').innerText = data.room;
-    document.getElementById('chatBox').innerHTML = '';
-  } else if (data.type === 'newMessage') {
-    const chatBox = document.getElementById('chatBox');
-    const messageElem = document.createElement('div');
-    messageElem.classList.add('message');
-    messageElem.setAttribute('data-id', data.message.id);
-    messageElem.innerHTML = `
-      <span><strong>${data.message.user}:</strong> ${data.message.text}</span>
-      ${data.message.user === username ? 
-        `<button onclick="editMessage(${data.message.id}, '${data.message.text}')">Edit</button>
-         <button onclick="deleteMessage(${data.message.id})">Delete</button>` : ''}
-    `;
-    chatBox.appendChild(messageElem);
-  } else if (data.type === 'updateMessage') {
-    const messageElem = document.querySelector(`.message[data-id="${data.id}"] span`);
-    if (messageElem) {
-      messageElem.innerHTML = `<strong>${username}:</strong> ${data.text}`;
+      if (data.type === 'roomList') {
+        const roomsList = document.getElementById('roomsList');
+        roomsList.innerHTML = '';
+        data.rooms.forEach(room => {
+          const li = document.createElement('li');
+          li.innerHTML = `<button onclick="joinRoom('${room}')">${room}</button>`;
+          roomsList.appendChild(li);
+        });
+      } else if (data.type === 'roomJoined') {
+        document.getElementById('roomScreen').classList.add('hidden');
+        document.getElementById('chatScreen').classList.remove('hidden');
+        document.getElementById('roomTitle').innerText = data.room;
+        document.getElementById('chatBox').innerHTML = '';
+      } else if (data.type === 'newMessage') {
+        const chatBox = document.getElementById('chatBox');
+        const messageElem = document.createElement('div');
+        messageElem.classList.add('message');
+        messageElem.setAttribute('data-id', data.message.id);
+        messageElem.innerHTML = `
+          <span><strong>${data.message.user}:</strong> ${data.message.text}</span>
+          ${data.message.user === username ? 
+            `<button onclick="editMessage(${data.message.id}, '${data.message.text}')">Edit</button>
+             <button onclick="deleteMessage(${data.message.id})">Delete</button>` : '' }
+        `;
+        chatBox.appendChild(messageElem);
+      } else if (data.type === 'updateMessage') {
+        const messageElem = document.querySelector(`.message[data-id="${data.id}"] span`);
+        if (messageElem) {
+          messageElem.innerHTML = `<strong>${username}:</strong> ${data.text}`;
+        }
+      } else if (data.type === 'removeMessage') {
+        const messageElem = document.querySelector(`.message[data-id="${data.id}"]`);
+        if (messageElem) {
+          messageElem.remove();
+        }
+      } else if (data.type === 'userJoined') {
+        displayNotification(`${data.name} joined the chat.`);
+      } else if (data.type === 'userLeft') {
+        displayNotification(`${data.name} left the chat.`);
+      }
     }
-  } else if (data.type === 'removeMessage') {
-    const messageElem = document.querySelector(`.message[data-id="${data.id}"]`);
-    if (messageElem) {
-      messageElem.remove();
+
+    function displayNotification(text) {
+      const chatBox = document.getElementById('chatBox');
+      const notificationElem = document.createElement('div');
+      notificationElem.style.color = 'gray';
+      notificationElem.style.fontStyle = 'italic';
+      notificationElem.innerText = text;
+      chatBox.appendChild(notificationElem);
     }
-  } else if (data.type === 'userJoined') {
-    displayNotification(`${data.name} joined the chat.`);
-  } else if (data.type === 'userLeft') {
-    displayNotification(`${data.name} left the chat.`);
-  }
-}
-
-function displayNotification(text) {
-  const chatBox = document.getElementById('chatBox');
-  const notificationElem = document.createElement('div');
-  notificationElem.style.color = 'gray';
-  notificationElem.style.fontStyle = 'italic';
-  notificationElem.innerText = text;
-  chatBox.appendChild(notificationElem);
-}
-
   </script>
 </body>
 </html>
